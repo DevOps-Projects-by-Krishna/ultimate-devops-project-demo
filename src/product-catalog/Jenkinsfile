@@ -1,46 +1,107 @@
-pipeline{
+```groovy
+pipeline {
+
     agent any
 
-    parameters{
+    parameters {
         string(
-            name:'docker_server_ip',
-            description: "Enter the Docker Ip adress"
+            name: 'docker_server_ip',
+            description: 'Enter the Docker server IP address'
         )
     }
 
     environment {
-        DOCKER_SERVER = 'ubuntu@${docker_server_ip}'
+        DOCKER_SERVER = "ubuntu@${params.docker_server_ip}"
+        DOCKER_IMAGE  = "yourdockerhubusername/product-catalog"
         IMAGE_TAG     = "${BUILD_NUMBER}"
     }
 
-    stages{
-        stage('Git-checkout'){
-            git branch: 'main', 
-            credentialsId: 'github-credentials', 
-            url: 'https://github.com/DevOps-Projects-by-Krishna/ultimate-devops-project-demo.git'
-        }
+    stages {
 
-        stage('Building_Docker_image){
-            sshagent(credentials: ['docker-agent-key'], executable: '') {
-                bat '''
-                    scp -o StrictHostKeyChecking=no -r /src/product-catalog %DOCKER_SERVER%:/home/ubuntu
-                    ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "docker build -t %DOCKER_IMAGE%:%IMAGE_TAG% ."
-                '''
+        stage('Git-checkout') {
+            steps {
+                git(
+                    branch: 'main',
+                    credentialsId: 'github-credentials',
+                    url: 'https://github.com/DevOps-Projects-by-Krishna/ultimate-devops-project-demo.git'
+                )
             }
         }
 
-        stage('Pushing-Image-to-DockerHub){
-            sshagent(credentials: ['docker-agent-key'], executable: '') {
-                withCredentials([usernameColonPassword(credentialsId: 'dockerhub-credentials', variable: '')]) {
-                bat '''
-                    ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "docker build -t %DOCKER_IMAGE%:%IMAGE_TAG% ."
-                '''
+        stage('Copy Source to Docker Server') {
+            steps {
+
+                sshagent(credentials: ['docker-agent-key']) {
+
+                    bat """
+                        ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "rm -rf /home/ubuntu/product-catalog"
+                        
+                        ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "mkdir -p /home/ubuntu/product-catalog"
+
+                        scp -o StrictHostKeyChecking=no -r product-catalog %DOCKER_SERVER%:/home/ubuntu/
+                    """
+                }
+            }
+        }
+
+        stage('Building Docker Image') {
+            steps {
+
+                sshagent(credentials: ['docker-agent-key']) {
+
+                    bat """
+                        ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "cd /home/ubuntu/product-catalog && docker build -t %DOCKER_IMAGE%:%IMAGE_TAG% ."
+                    """
+                }
+            }
+        }
+
+        stage('Login to Docker Hub') {
+            steps {
+
+                withCredentials([
+                    usernameColonPassword(
+                        credentialsId: 'dockerhub-credentials',
+                        variable: 'DOCKER_AUTH'
+                    )
+                ]) {
+
+                    sshagent(credentials: ['docker-agent-key']) {
+
+                        bat """
+                            ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "echo '%DOCKER_AUTH%' | tr ':' '\\n' | head -1"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Push Image to Docker Hub') {
+            steps {
+
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+
+                    sshagent(credentials: ['docker-agent-key']) {
+
+                        bat """
+                            ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "echo '%DOCKER_PASSWORD%' | docker login -u '%DOCKER_USERNAME%' --password-stdin"
+
+                            ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "docker push %DOCKER_IMAGE%:%IMAGE_TAG%"
+                        """
+                    }
                 }
             }
         }
     }
 
     post {
+
         success {
             echo "Docker image pushed successfully!"
             echo "Image: ${DOCKER_IMAGE}:${IMAGE_TAG}"
@@ -51,3 +112,4 @@ pipeline{
         }
     }
 }
+```
