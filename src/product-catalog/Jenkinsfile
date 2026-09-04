@@ -1,0 +1,53 @@
+pipeline{
+    agent any
+
+    parameters{
+        string(
+            name:'docker_server_ip'
+            description: "Enter the Docker Ip adress"
+        )
+    }
+
+    environment {
+        DOCKER_SERVER = 'ubuntu@${docker_server_ip}'
+        IMAGE_TAG     = "${BUILD_NUMBER}"
+    }
+
+    stages{
+        stage('Git-checkout'){
+            git branch: 'main', 
+            credentialsId: 'github-credentials', 
+            url: 'https://github.com/DevOps-Projects-by-Krishna/ultimate-devops-project-demo.git'
+        }
+
+        stage('Building_Docker_image){
+            sshagent(credentials: ['docker-agent-key'], executable: '') {
+                bat '''
+                    scp -o StrictHostKeyChecking=no -r /src/product-catalog %DOCKER_SERVER%:/home/ubuntu
+                    ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "docker build -t %DOCKER_IMAGE%:%IMAGE_TAG% ."
+                '''
+            }
+        }
+
+        stage('Pushing-Image-to-DockerHub){
+            sshagent(credentials: ['docker-agent-key'], executable: '') {
+                withCredentials([usernameColonPassword(credentialsId: 'dockerhub-credentials', variable: '')]) {
+                bat '''
+                    ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "docker build -t %DOCKER_IMAGE%:%IMAGE_TAG% ."
+                '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Docker image pushed successfully!"
+            echo "Image: ${DOCKER_IMAGE}:${IMAGE_TAG}"
+        }
+
+        failure {
+            echo "Pipeline failed."
+        }
+    }
+}
