@@ -3,7 +3,7 @@ pipeline{
 
     parameters{
         string(
-            name:'docker_server_ip'
+            name:'docker_server_ip',
             description: "Enter the Docker Ip adress"
         )
     }
