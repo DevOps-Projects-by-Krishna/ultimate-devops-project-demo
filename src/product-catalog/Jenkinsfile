@@ -37,7 +37,7 @@ pipeline {
                         
                         ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "mkdir -p /home/ubuntu/product-catalog"
 
-                        scp -o StrictHostKeyChecking=no -r product-catalog %DOCKER_SERVER%:JENKINS_HOME\workspace\OpenTelemetry\src\product-catalog
+                        scp -o StrictHostKeyChecking=no -r product-catalog %DOCKER_SERVER%:JENKINS_HOME/workspace/OpenTelemetry/src/product-catalog/
                     """
                 }
             }
