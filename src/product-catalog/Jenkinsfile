@@ -37,7 +37,7 @@ pipeline {
                         
                         ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "mkdir -p /home/ubuntu/product-catalog"
 
-                        scp -o StrictHostKeyChecking=no -r product-catalog %DOCKER_SERVER%:/home/ubuntu/
+                        scp -o StrictHostKeyChecking=no -r product-catalog %DOCKER_SERVER%:JENKINS_HOME\workspace\OpenTelemetry\src\product-catalog\
                     """
                 }
             }
@@ -78,6 +78,8 @@ pipeline {
         stage('Push Image to Docker Hub') {
             steps {
 
+                sshagent(credentials: ['docker-agent-key']) {
+
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'dockerhub-credentials',
@@ -85,8 +87,6 @@ pipeline {
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
-
-                    sshagent(credentials: ['docker-agent-key']) {
 
                         bat """
                             ssh -o StrictHostKeyChecking=no %DOCKER_SERVER% "echo '%DOCKER_PASSWORD%' | docker login -u '%DOCKER_USERNAME%' --password-stdin"
